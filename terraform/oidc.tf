@@ -43,32 +43,34 @@ resource "aws_iam_role" "gha_deployer" {
   tags               = { Project = var.project }
 }
 
-resource "aws_iam_role_policy" "gha_deployer_permissions" {
-  name = "deployer-permissions"
+# ── Managed policy attachments ────────────────────────────────────────────────
+
+# ECR push/pull and standard registry operations
+resource "aws_iam_role_policy_attachment" "gha_deployer_ecr" {
+  role       = aws_iam_role.gha_deployer.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
+}
+
+# CloudWatch Logs – create/delete log groups, put retention policies, etc.
+resource "aws_iam_role_policy_attachment" "gha_deployer_cloudwatch_logs" {
+  role       = aws_iam_role.gha_deployer.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+}
+
+# ── Custom inline policy for permissions without a suitable managed equivalent ─
+
+resource "aws_iam_role_policy" "gha_deployer_custom" {
+  name = "deployer-custom-permissions"
   role = aws_iam_role.gha_deployer.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # ── ECR ──────────────────────────────────────────────────────────────────
+      # ── ECR repository management (not covered by ECRPowerUser) ───────────────
       {
-        Sid      = "ECRAuth"
-        Effect   = "Allow"
-        Action   = ["ecr:GetAuthorizationToken"]
-        Resource = ["*"]
-      },
-      {
-        Sid    = "ECRReadWrite"
+        Sid    = "ECRRepoManage"
         Effect = "Allow"
         Action = [
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:InitiateLayerUpload",
-          "ecr:UploadLayerPart",
-          "ecr:CompleteLayerUpload",
-          "ecr:PutImage",
-          "ecr:DescribeRepositories",
           "ecr:CreateRepository",
           "ecr:DeleteRepository",
           "ecr:PutLifecyclePolicy",
@@ -135,7 +137,7 @@ resource "aws_iam_role_policy" "gha_deployer_permissions" {
         ]
         Resource = ["*"]
       },
-      # ── S3 artifacts bucket ───────────────────────────────────────────────────
+      # ── S3 artifacts bucket (scoped to specific bucket) ───────────────────────
       {
         Sid    = "S3Artifacts"
         Effect = "Allow"
@@ -168,22 +170,6 @@ resource "aws_iam_role_policy" "gha_deployer_permissions" {
           aws_s3_bucket.artifacts.arn,
           "${aws_s3_bucket.artifacts.arn}/*"
         ]
-      },
-      # ── CloudWatch Logs ───────────────────────────────────────────────────────
-      {
-        Sid    = "CloudWatchLogs"
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:DeleteLogGroup",
-          "logs:DescribeLogGroups",
-          "logs:ListTagsLogGroup",
-          "logs:PutRetentionPolicy",
-          "logs:DeleteRetentionPolicy",
-          "logs:TagResource",
-          "logs:ListTagsForResource"
-        ]
-        Resource = ["*"]
       },
       # ── EC2 (VPC/SG management needed by Terraform) ───────────────────────────
       {
