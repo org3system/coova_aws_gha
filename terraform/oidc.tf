@@ -171,6 +171,33 @@ resource "aws_iam_role_policy" "gha_deployer_custom" {
           "${aws_s3_bucket.artifacts.arn}/*"
         ]
       },
+      # ── Terraform remote state (S3 bucket + DynamoDB lock table) ─────────────
+      {
+        Sid    = "S3TerraformState"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket",
+          "s3:GetBucketVersioning"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.tf_state_bucket}",
+          "arn:aws:s3:::${var.tf_state_bucket}/*"
+        ]
+      },
+      {
+        Sid    = "DynamoDBStateLock"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:DescribeTable"
+        ]
+        Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/terraform-state-lock"
+      },
       # ── EC2 (VPC/SG management needed by Terraform) ───────────────────────────
       {
         Sid    = "EC2VPCManage"
