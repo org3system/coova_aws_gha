@@ -1,0 +1,96 @@
+name: Bootstrap – Create Terraform State Backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      state_bucket_name:
+        description: "Globally unique S3 bucket name for Terraform state"
+        required: true
+      aws_region:
+        description: "AWS region"
+        required: false
+        default: "us-east-1"
+
+# Run this workflow ONCE before anything else.
+# It uses static AWS credentials (bootstrap IAM user) to create the S3 state
+# bucket and DynamoDB lock table, then runs the main terraform apply to create
+# the gha_deployer OIDC role.
+#
+# After this workflow succeeds:
+#   1. Set TF_STATE_BUCKET as a GitHub Actions variable (Settings → Variables)
+#   2. Set AWS_ROLE_ARN to the gha_deployer ARN printed in the outputs step
+#   3. Delete or disable the AWS_BOOTSTRAP_* secrets – they are no longer needed
+#
+# Required GitHub secrets (one-time bootstrap IAM user):
+#   AWS_BOOTSTRAP_ACCESS_KEY_ID
+#   AWS_BOOTSTRAP_SECRET_ACCESS_KEY
+#
+# Required GitHub variables (must exist before running):
+#   SUBNET_IDS   – e.g. ["subnet-abc123","subnet-def456"]
+#   VPC_ID       – e.g. vpc-0abc1234
+
+jobs:
+  bootstrap:
+    name: Bootstrap Terraform remote state + provision infra
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (static – bootstrap only)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_BOOTSTRAP_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_BOOTSTRAP_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ inputs.aws_region }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+          terraform_wrapper: false
+
+      # ── Step 1: create state bucket + DynamoDB table (local state) ────────────
+      - name: Bootstrap – terraform init
+        working-directory: terraform/bootstrap
+        run: terraform init
+
+      - name: Bootstrap – terraform apply
+        working-directory: terraform/bootstrap
+        run: |
+          terraform apply -auto-approve \
+            -var="aws_region=${{ inputs.aws_region }}" \
+            -var="state_bucket_name=${{ inputs.state_bucket_name }}"
+
+      # ── Step 2: apply main Terraform (creates gha_deployer OIDC role, etc.) ──
+      - name: Main – terraform init (with remote backend)
+        working-directory: terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ inputs.state_bucket_name }}" \
+            -backend-config="region=${{ inputs.aws_region }}"
+
+      - name: Main – terraform apply
+        working-directory: terraform
+        run: |
+          terraform apply -auto-approve \
+            -var="aws_region=${{ inputs.aws_region }}" \
+            -var='subnet_ids=${{ vars.SUBNET_IDS }}' \
+            -var="vpc_id=${{ vars.VPC_ID }}" \
+            -var="tf_state_bucket=${{ inputs.state_bucket_name }}"
+
+      - name: Print next-step instructions
+        working-directory: terraform
+        run: |
+          echo ""
+          echo "════════════════════════════════════════════════════════════"
+          echo " Bootstrap complete. Set these GitHub Actions variables:"
+          echo "════════════════════════════════════════════════════════════"
+          echo " TF_STATE_BUCKET = ${{ inputs.state_bucket_name }}"
+          echo " AWS_ROLE_ARN    = $(terraform output -raw gha_deployer_role_arn)"
+          echo "════════════════════════════════════════════════════════════"
+          echo " Then delete the AWS_BOOTSTRAP_* secrets – no longer needed."
+          echo "════════════════════════════════════════════════════════════"

@@ -10,6 +10,7 @@ on:
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
   TF_DIR: terraform
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
 
 jobs:
   # ─── 1. Terraform: ensure infra is up & capture outputs ────────────────────
@@ -45,7 +46,10 @@ jobs:
 
       - name: Terraform init
         working-directory: ${{ env.TF_DIR }}
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
+            -backend-config="region=${{ env.AWS_REGION }}"
 
       - name: Terraform apply
         working-directory: ${{ env.TF_DIR }}
@@ -53,7 +57,8 @@ jobs:
           terraform apply -auto-approve \
             -var="aws_region=${{ env.AWS_REGION }}" \
             -var='subnet_ids=${{ vars.SUBNET_IDS }}' \
-            -var="vpc_id=${{ vars.VPC_ID }}"
+            -var="vpc_id=${{ vars.VPC_ID }}" \
+            -var="tf_state_bucket=${{ env.TF_STATE_BUCKET }}"
 
       - name: Capture Terraform outputs
         id: tf_out

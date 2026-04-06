@@ -31,3 +31,8 @@ variable "vpc_id" {
   description = "VPC ID used for the ECS task security group"
   type        = string
 }
+
+variable "tf_state_bucket" {
+  description = "S3 bucket name for Terraform remote state (created by terraform/bootstrap)"
+  type        = string
+}
