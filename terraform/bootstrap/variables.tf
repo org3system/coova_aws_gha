@@ -20,3 +20,9 @@ variable "lock_table_name" {
   type        = string
   default     = "terraform-state-lock"
 }
+
+variable "bootstrap_iam_user" {
+  description = "IAM username of the one-time bootstrap user (AWS_BOOTSTRAP_ACCESS_KEY_ID owner)"
+  type        = string
+  default     = "iam-coova-ec-bs"
+}
