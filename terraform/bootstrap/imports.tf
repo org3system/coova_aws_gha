@@ -28,37 +28,4 @@ import {
   id = var.lock_table_name
 }
 
-import {
-  to = aws_iam_user_policy_attachment.bootstrap["iam"]
-  id = "${var.bootstrap_iam_user}/arn:aws:iam::aws:policy/IAMFullAccess"
-}
 
-import {
-  to = aws_iam_user_policy_attachment.bootstrap["ec2"]
-  id = "${var.bootstrap_iam_user}/arn:aws:iam::aws:policy/AmazonEC2FullAccess"
-}
-
-import {
-  to = aws_iam_user_policy_attachment.bootstrap["ecs"]
-  id = "${var.bootstrap_iam_user}/arn:aws:iam::aws:policy/AmazonECS_FullAccess"
-}
-
-import {
-  to = aws_iam_user_policy_attachment.bootstrap["ecr"]
-  id = "${var.bootstrap_iam_user}/arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
-}
-
-import {
-  to = aws_iam_user_policy_attachment.bootstrap["s3"]
-  id = "${var.bootstrap_iam_user}/arn:aws:iam::aws:policy/AmazonS3FullAccess"
-}
-
-import {
-  to = aws_iam_user_policy_attachment.bootstrap["dynamodb"]
-  id = "${var.bootstrap_iam_user}/arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
-}
-
-import {
-  to = aws_iam_user_policy_attachment.bootstrap["cloudwatch_logs"]
-  id = "${var.bootstrap_iam_user}/arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
-}
