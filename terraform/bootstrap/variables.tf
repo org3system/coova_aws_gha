@@ -26,7 +26,7 @@ variable "lock_table_name" {
 }
 
 variable "bootstrap_iam_user" {
-  description = "IAM username of the one-time bootstrap user (AWS_BOOTSTRAP_ACCESS_KEY_ID owner)"
+  description = "IAM username of the one-time bootstrap user (AWS_BOOTSTRAP_ACCESS_KEY_ID owner). Used only for the pre-flight policy check in the GitHub Actions workflow — not managed by Terraform."
   type        = string
   default     = "iam-coova-ec-bs"
   validation {

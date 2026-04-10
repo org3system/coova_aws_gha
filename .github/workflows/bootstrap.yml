@@ -20,6 +20,20 @@ on:
 # bucket and DynamoDB lock table, then runs the main terraform apply to create
 # the gha_deployer OIDC role.
 #
+# ── Manual prerequisite (one-time, done outside this workflow) ───────────────
+# The bootstrap IAM user must have these 7 AWS managed policies attached BEFORE
+# running this workflow (attach via AWS console or CLI as root/admin):
+#   IAMFullAccess
+#   AmazonEC2FullAccess
+#   AmazonECS_FullAccess
+#   AmazonEC2ContainerRegistryFullAccess
+#   AmazonS3FullAccess
+#   AmazonDynamoDBFullAccess
+#   CloudWatchLogsFullAccess
+#
+# The workflow includes a pre-flight step that verifies these are attached and
+# fails fast with a clear message if any are missing.
+#
 # After this workflow succeeds:
 #   1. Set TF_STATE_BUCKET as a GitHub Actions variable (Settings → Variables)
 #   2. Set AWS_ROLE_ARN to the gha_deployer ARN printed in the outputs step
@@ -57,6 +71,38 @@ jobs:
           terraform_version: "~1.9"
           terraform_wrapper: false
 
+      # ── Pre-flight: verify required IAM policies are attached ────────────────
+      - name: Pre-flight – verify bootstrap IAM policies
+        env:
+          BOOTSTRAP_USER: ${{ inputs.bootstrap_iam_user }}
+        run: |
+          required_policies=(
+            "arn:aws:iam::aws:policy/IAMFullAccess"
+            "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+            "arn:aws:iam::aws:policy/AmazonECS_FullAccess"
+            "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
+            "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+            "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+            "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+          )
+          attached=$(aws iam list-attached-user-policies \
+            --user-name "$BOOTSTRAP_USER" \
+            --query 'AttachedPolicies[].PolicyArn' \
+            --output text)
+          missing=()
+          for policy in "${required_policies[@]}"; do
+            if ! echo "$attached" | grep -qF "$policy"; then
+              missing+=("$policy")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "❌ Bootstrap user '$BOOTSTRAP_USER' is missing required IAM policies."
+            echo "   Attach the following via AWS console or CLI (as root/admin), then re-run:"
+            for p in "${missing[@]}"; do echo "     $p"; done
+            exit 1
+          fi
+          echo "✅ All required IAM policies are attached to '$BOOTSTRAP_USER'."
+
       # ── Step 1: create state bucket + DynamoDB table (local state) ────────────
       - name: Bootstrap – terraform init
         working-directory: terraform/bootstrap
@@ -67,8 +113,7 @@ jobs:
         run: |
           terraform apply -auto-approve \
             -var="aws_region=${{ inputs.aws_region }}" \
-            -var="state_bucket_name=${{ inputs.state_bucket_name }}" \
-            -var="bootstrap_iam_user=${{ inputs.bootstrap_iam_user }}"
+            -var="state_bucket_name=${{ inputs.state_bucket_name }}"
 
       # ── Step 2: apply main Terraform (creates gha_deployer OIDC role, etc.) ──
       - name: Main – terraform init (with remote backend)
