@@ -10,6 +10,10 @@ on:
         description: "AWS region"
         required: false
         default: "us-east-1"
+      bootstrap_iam_user:
+        description: "IAM username that owns AWS_BOOTSTRAP_* credentials (leave blank to use default: iam-coova-ec-bs)"
+        required: false
+        default: "iam-coova-ec-bs"
 
 # Run this workflow ONCE before anything else.
 # It uses static AWS credentials (bootstrap IAM user) to create the S3 state
@@ -63,7 +67,8 @@ jobs:
         run: |
           terraform apply -auto-approve \
             -var="aws_region=${{ inputs.aws_region }}" \
-            -var="state_bucket_name=${{ inputs.state_bucket_name }}"
+            -var="state_bucket_name=${{ inputs.state_bucket_name }}" \
+            -var="bootstrap_iam_user=${{ inputs.bootstrap_iam_user }}"
 
       # ── Step 2: apply main Terraform (creates gha_deployer OIDC role, etc.) ──
       - name: Main – terraform init (with remote backend)
